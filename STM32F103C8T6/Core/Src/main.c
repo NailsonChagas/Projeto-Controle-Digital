@@ -8,6 +8,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 // transdutor
 #define ADC_SCALE_FACTOR (3.3f / 4096.0f)  //  3.3V em um ADC de 12bits
 #define TRANSDUCTOR_GAIN 0.1375 // (1.0 / (24.0/3.3) ) pelo divisor de tensão
@@ -19,12 +20,19 @@
 #define Ts      (1.0f/Fs)
 #define A  		6      // Amplitude
 #define OFFSET 	12
+#define ARRAY_MAX_SIZE (Fs / F)
 
 // controlador
 #define Kp 0.08f
 #define Ki 0.02f
 
-#define ARRAY_MAX_SIZE (Fs / F)
+// alimentação
+#define E 24.0f
+
+// duty_cycle
+#define DUTY_CICLE_CONST (ARRAY_MAX_SIZE/E)
+
+
 
 /* USER CODE END Includes */
 
@@ -71,7 +79,8 @@ int curr_idx = 0;
  * Obs: ao invés de calcular a cada iteração eu poderia simplesmente armazernar todo um
  * periodo da senoidal já q o sinal de ref não se altera
  */
-float ref_signal[ARRAY_MAX_SIZE] = {0};
+//float ref_signal[ARRAY_MAX_SIZE] = {0};
+float ref_signal = 0;
 
 /*
  * Transdutor -> um dispositivo que transforma um tipo de energia em outro
@@ -94,6 +103,11 @@ float prev_error = 0;
  */
 float pid_output[ARRAY_MAX_SIZE] = {0};
 float prev_pid_output = 0;
+
+/*
+ * Duty cycle
+ */
+float duty_cycle = 0;
 
 /* USER CODE END 0 */
 
@@ -309,8 +323,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if(htim->Instance == TIM2)
 	{
 		prev_transductor_val = transductor_input[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
-		ref_signal[curr_idx] = OFFSET + A * sin(2 * PI * F * Ts * curr_idx);
-		error[curr_idx] = ref_signal[curr_idx] - prev_transductor_val;
+//		ref_signal[curr_idx] = OFFSET + A * sin(2 * PI * F * Ts * curr_idx);
+		ref_signal = OFFSET + A * sin(2 * PI * F * Ts * curr_idx);
+		error[curr_idx] = ref_signal - prev_transductor_val;
 
 		// Inicia a conversão ADC
 		HAL_ADC_Start(&hadc1);
@@ -325,6 +340,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			prev_error = error[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
 
 			pid_output[curr_idx] = prev_pid_output + Kp*error[curr_idx] - Kp*Ki*prev_error;
+
+			if(pid_output[curr_idx] < 0){
+				pid_output[curr_idx] = 0;
+			}
+			else if(pid_output[curr_idx] > E){
+				pid_output[curr_idx] = E;
+			}
+
+			duty_cycle = pid_output[curr_idx] * DUTY_CICLE_CONST;
 
 			if(curr_idx < ARRAY_MAX_SIZE){
 				curr_idx++;
