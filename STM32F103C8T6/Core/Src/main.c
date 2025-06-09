@@ -1,19 +1,6 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
+  (160/16MHz) * 20 = 0.0002 -> 5000 Hz
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -21,6 +8,23 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+// transdutor
+#define ADC_SCALE_FACTOR (3.3f / 4096.0f)  //  3.3V em um ADC de 12bits
+#define TRANSDUCTOR_GAIN 0.1375 // (1.0 / (24.0/3.3) ) pelo divisor de tensão
+
+// ref
+#define PI 		3.14159265359f
+#define F  		50     // Frequência da senoide (50 Hz)
+#define Fs 		5000   // Frequência de amostragem (5 kHz)
+#define Ts      (1.0f/Fs)
+#define A  		6      // Amplitude
+#define OFFSET 	12
+
+// controlador
+#define Kp 0.08f
+#define Ki 0.02f
+
+#define ARRAY_MAX_SIZE (Fs / F)
 
 /* USER CODE END Includes */
 
@@ -59,9 +63,38 @@ static void MX_TIM2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int curr_idx = 0;
 
-uint16_t ADC_value = 0;
-int count = 0;
+/*
+ * Sinal de referencia sera uma senoidal com offset de 12V, amplitude de 6V e freq de 50 Hz
+ *
+ * Obs: ao invés de calcular a cada iteração eu poderia simplesmente armazernar todo um
+ * periodo da senoidal já q o sinal de ref não se altera
+ */
+float ref_signal[ARRAY_MAX_SIZE] = {0};
+
+/*
+ * Transdutor -> um dispositivo que transforma um tipo de energia em outro
+ *
+ * basicamente um sensor, o que em nosso caso seria o divisor de tensão que permite
+ * lermos a tensão do sistema pelo ADC
+ * */
+float transductor_input[ARRAY_MAX_SIZE] = {0};
+float prev_transductor_val = 0;
+
+/*
+ * Error é o array que contem o erro do sistema
+ * basicamente é o valor da diferença entre o sinal de referencia e o sinal medido
+ */
+float error[ARRAY_MAX_SIZE] = {0};
+float prev_error = 0;
+
+/*
+ * Saída do controlador
+ */
+float pid_output[ARRAY_MAX_SIZE] = {0};
+float prev_pid_output = 0;
+
 /* USER CODE END 0 */
 
 /**
@@ -275,19 +308,29 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if(htim->Instance == TIM2)
 	{
+		prev_transductor_val = transductor_input[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
+		ref_signal[curr_idx] = OFFSET + A * sin(2 * PI * F * Ts * curr_idx);
+		error[curr_idx] = ref_signal[curr_idx] - prev_transductor_val;
+
 		// Inicia a conversão ADC
 		HAL_ADC_Start(&hadc1);
 
 		// Espera a conversão estar pronta (timeout opcional)
 		if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
 		{
-			ADC_value = HAL_ADC_GetValue(&hadc1);
+			transductor_input[curr_idx] = HAL_ADC_GetValue(&hadc1) * ADC_SCALE_FACTOR / TRANSDUCTOR_GAIN;
 
-			if(count < 1000000){
-				count++;
+			// u(k) = u(k-1) + Kp*e(k) - Kp*Ki*e(k-1);
+			prev_pid_output = pid_output[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
+			prev_error = error[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
+
+			pid_output[curr_idx] = prev_pid_output + Kp*error[curr_idx] - Kp*Ki*prev_error;
+
+			if(curr_idx < ARRAY_MAX_SIZE){
+				curr_idx++;
 			}
 			else{
-				count = 0;
+				curr_idx = 0;
 			}
 		}
 		HAL_ADC_Stop(&hadc1);

@@ -60,8 +60,8 @@ all: main-build
 main-build: controlador.elf secondary-outputs
 
 # Tool invocations
-controlador.elf controlador.map: $(OBJS) $(USER_OBJS) /home/nailsonchagas/Downloads/Controle_Digital/ProjetoControleDigital/STM32F103C8T6/STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "controlador.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"/home/nailsonchagas/Downloads/Controle_Digital/ProjetoControleDigital/STM32F103C8T6/STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="controlador.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+controlador.elf controlador.map: $(OBJS) $(USER_OBJS) /home/nailsonchagas/Downloads/Controle_Digital/Projeto-Controle-Digital/STM32F103C8T6/STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "controlador.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"/home/nailsonchagas/Downloads/Controle_Digital/Projeto-Controle-Digital/STM32F103C8T6/STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="controlador.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
