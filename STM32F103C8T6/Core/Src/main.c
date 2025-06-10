@@ -20,7 +20,7 @@
 #define Ts      (1.0f/Fs)
 #define A  		6      // Amplitude
 #define OFFSET 	12
-#define ARRAY_MAX_SIZE (Fs / F)
+#define ARRAY_MAX_SIZE 3
 
 // controlador
 #define Kp 0.08f
@@ -30,7 +30,8 @@
 #define E 24.0f
 
 // duty_cycle
-#define DUTY_CICLE_CONST (ARRAY_MAX_SIZE/E)
+// 16MHz/5kHz = 3200
+#define DUTY_CICLE_CONST (3200.0f/E) // (SAMPLES_PER_PERIOD/E)
 
 
 
@@ -107,7 +108,7 @@ float prev_pid_output = 0;
 /*
  * Duty cycle
  */
-float duty_cycle = 0;
+int duty_cycle = 0;
 
 /* USER CODE END 0 */
 
