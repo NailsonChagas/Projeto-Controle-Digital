@@ -81,7 +81,7 @@ int curr_idx = 0;
  * Obs: ao invés de calcular a cada iteração eu poderia simplesmente armazernar todo um
  * periodo da senoidal já q o sinal de ref não se altera
  */
-//float ref_signal[ARRAY_MAX_SIZE] = {0};
+//float ref_signal_array[ARRAY_MAX_SIZE] = {0};
 float ref_signal = 0;
 
 /*
@@ -109,7 +109,7 @@ float prev_pid_output = 0;
 /*
  * Duty cycle
  */
-int duty_cycle = 0;
+uint16_t duty_cycle = 0;
 
 /* USER CODE END 0 */
 
@@ -158,7 +158,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, duty_cycle);
+
   }
   /* USER CODE END 3 */
 }
@@ -367,6 +367,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			}
 
 			duty_cycle = pid_output[curr_idx] * DUTY_CICLE_CONST;
+			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, duty_cycle); // mudar o duty_cycle
 
 			if(curr_idx < ARRAY_MAX_SIZE){
 				curr_idx++;
