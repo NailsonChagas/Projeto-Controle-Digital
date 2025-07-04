@@ -8,7 +8,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#define TIMER_COUNTER (3200-1-10)
+#define TIMER_COUNTER (3200-1-500)
 #define ARRAY_MAX_SIZE 2
 
 // transdutor
