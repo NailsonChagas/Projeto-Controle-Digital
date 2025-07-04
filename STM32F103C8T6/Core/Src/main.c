@@ -21,11 +21,25 @@
 #define Ts      (1.0f/Fs)
 #define A  		6      // Amplitude
 #define OFFSET 	12
-#define ARRAY_MAX_SIZE 3
+#define ARRAY_MAX_SIZE 2
 
 // controlador
-#define Kp 0.08f
-#define Ki 0.02f
+//opção 1
+#define Kp 0.062f
+#define Ki 0.17f
+#define Kd 0.05f
+//opção 2
+//#define Kp 0.15f
+//#define Ki 0.004f
+//#define Kd 0.3f
+//opção 3
+//#define Kp 0.1f
+//#define Ki 0.01f
+//#define Kd 0.2f
+//opção 4
+//#define Kp 0.062f
+//#define Ki 0.01
+//#define Kd 0.05f
 
 // alimentação
 #define E 24.0f
@@ -33,8 +47,6 @@
 // duty_cycle
 // 16MHz/5kHz = 3200
 #define DUTY_CICLE_CONST (TIMER_COUNTER/E) // (SAMPLES_PER_PERIOD/E)
-
-
 
 /* USER CODE END Includes */
 
@@ -56,6 +68,7 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
@@ -67,6 +80,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -81,7 +95,6 @@ int curr_idx = 0;
  * Obs: ao invés de calcular a cada iteração eu poderia simplesmente armazernar todo um
  * periodo da senoidal já q o sinal de ref não se altera
  */
-//float ref_signal_array[ARRAY_MAX_SIZE] = {0};
 float ref_signal = 0;
 
 /*
@@ -101,10 +114,17 @@ float error[ARRAY_MAX_SIZE] = {0};
 float prev_error = 0;
 
 /*
- * Saída do controlador
+ * Controlador PID
+ * uP(k) = Kp*e(k)
+ * uI(k) = uI(k-1) + Ki*e(k)*Ts
+ * uD(k) = Kd*((e(k) - e(k-1))/Ts)
+ * uPID = uP(k) + uI(k) + uD(k)
  */
-float pid_output[ARRAY_MAX_SIZE] = {0};
-float prev_pid_output = 0;
+float cP = 0;
+float cI[ARRAY_MAX_SIZE] = {0};
+float cD = 0;
+float prev_cI_output = 0;
+float pid_output = 0;
 
 /*
  * Duty cycle
@@ -144,11 +164,12 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_Base_Start_IT(&htim2);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, TIMER_COUNTER/2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -257,6 +278,81 @@ static void MX_ADC1_Init(void)
 }
 
 /**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 0;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 3200-1;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -270,7 +366,6 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -290,28 +385,15 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
-  HAL_TIM_MspPostInit(&htim2);
 
 }
 
@@ -341,7 +423,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if(htim->Instance == TIM2)
 	{
 		prev_transductor_val = transductor_input[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
-//		ref_signal[curr_idx] = OFFSET + A * sin(2 * PI * F * Ts * curr_idx);
 		ref_signal = OFFSET + A * sin(2 * PI * F * Ts * curr_idx);
 		error[curr_idx] = ref_signal - prev_transductor_val;
 
@@ -349,32 +430,36 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		HAL_ADC_Start(&hadc1);
 
 		// Espera a conversão estar pronta (timeout opcional)
-		if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+		if(HAL_ADC_PollForConversion(&hadc1, 0) == HAL_OK)
 		{
 			transductor_input[curr_idx] = HAL_ADC_GetValue(&hadc1) * ADC_SCALE_FACTOR / TRANSDUCTOR_GAIN;
-
-			// u(k) = u(k-1) + Kp*e(k) - Kp*Ki*e(k-1);
-			prev_pid_output = pid_output[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
+			prev_cI_output = cI[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
 			prev_error = error[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
 
-			pid_output[curr_idx] = prev_pid_output + Kp*error[curr_idx] - Kp*Ki*prev_error;
+			cP = Kp * error[curr_idx];
+			cI[curr_idx] = prev_cI_output + Ki * error[curr_idx];
 
-			if(pid_output[curr_idx] < 0){
-				pid_output[curr_idx] = 0;
+			if(cI[curr_idx] < -E){
+				cI[curr_idx] = -E;
 			}
-			else if(pid_output[curr_idx] > E){
-				pid_output[curr_idx] = E;
+			else if(cI[curr_idx] > E){
+				cI[curr_idx] = E;
 			}
 
-			duty_cycle = pid_output[curr_idx] * DUTY_CICLE_CONST;
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, duty_cycle); // mudar o duty_cycle
+			cD = Kd * (error[curr_idx] - prev_error);
+			pid_output = cP + cI[curr_idx] + cD;
 
-			if(curr_idx < ARRAY_MAX_SIZE){
-				curr_idx++;
+			if(pid_output < 0){
+				pid_output = 0;
 			}
-			else{
-				curr_idx = 0;
+			else if(pid_output > E){
+				pid_output = E;
 			}
+
+			duty_cycle = pid_output * DUTY_CICLE_CONST;
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty_cycle); // mudar o duty_cycle
+
+			curr_idx = (curr_idx + 1) % ARRAY_MAX_SIZE;
 		}
 		HAL_ADC_Stop(&hadc1);
 	}
