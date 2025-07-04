@@ -8,11 +8,15 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#define TIMER_COUNTER 3200
+#define TIMER_COUNTER (3200-1-10)
+#define ARRAY_MAX_SIZE 2
 
 // transdutor
 #define ADC_SCALE_FACTOR (3.3f / 4096.0f)  //  3.3V em um ADC de 12bits
-#define TRANSDUCTOR_GAIN 0.1375 // (1.0 / (24.0/3.3) ) pelo divisor de tensão
+// #define TRANSDUCTOR_GAIN 0.125 // (1.0 / (24.0/3.0) ) pelo divisor de tensão
+// #define TRANSDUCTOR_GAIN 0.125 // (1.0 / (24.0/3.13) )
+// #define TRANSDUCTOR_GAIN 0.045454545 //(1.0 / 22.0)
+#define TRANSDUCTOR_GAIN 0.085227273 //((0.125−0.045454545)÷2)+0.045454545
 
 // ref
 #define PI 		3.14159265359f
@@ -20,26 +24,27 @@
 #define Fs 		5000   // Frequência de amostragem (5 kHz)
 #define Ts      (1.0f/Fs)
 #define A  		6      // Amplitude
-#define OFFSET 	12
-#define ARRAY_MAX_SIZE 2
+//#define OFFSET 	12
+#define OFFSET 	10 // -2 por conta do teste empirco
+#define WAVE_TABLE_SIZE (Fs/F)
 
 // controlador
 //opção 1
-#define Kp 0.062f
-#define Ki 0.17f
-#define Kd 0.05f
-//opção 2
-//#define Kp 0.15f
-//#define Ki 0.004f
-//#define Kd 0.3f
-//opção 3
-//#define Kp 0.1f
-//#define Ki 0.01f
-//#define Kd 0.2f
-//opção 4
 //#define Kp 0.062f
-//#define Ki 0.01
+//#define Ki 0.17f
 //#define Kd 0.05f
+//opção 2
+//#define Kp 0.07f
+//#define Ki 0.18f
+//#define Kd 0.05f
+//opção 2
+//#define Kp 0.07f
+//#define Ki 0.2f
+//#define Kd 0.05f
+//opção 2
+#define Kp 0.09f
+#define Ki 0.2f
+#define Kd 0.05f
 
 // alimentação
 #define E 24.0f
@@ -95,7 +100,8 @@ int curr_idx = 0;
  * Obs: ao invés de calcular a cada iteração eu poderia simplesmente armazernar todo um
  * periodo da senoidal já q o sinal de ref não se altera
  */
-float ref_signal = 0;
+float ref_signal[WAVE_TABLE_SIZE] = {0};
+uint8_t ref_idx = 0;
 
 /*
  * Transdutor -> um dispositivo que transforma um tipo de energia em outro
@@ -105,6 +111,7 @@ float ref_signal = 0;
  * */
 float transductor_input[ARRAY_MAX_SIZE] = {0};
 float prev_transductor_val = 0;
+uint16_t adc_val = 0;
 
 /*
  * Error é o array que contem o erro do sistema
@@ -141,7 +148,9 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  for (int i = 0; i < WAVE_TABLE_SIZE; i++) {
+	ref_signal[i] = A * sinf(2 * PI * F * i * Ts) + OFFSET;
+  }
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -423,8 +432,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if(htim->Instance == TIM2)
 	{
 		prev_transductor_val = transductor_input[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
-		ref_signal = OFFSET + A * sin(2 * PI * F * Ts * curr_idx);
-		error[curr_idx] = ref_signal - prev_transductor_val;
+		error[curr_idx] = ref_signal[ref_idx] - prev_transductor_val;
 
 		// Inicia a conversão ADC
 		HAL_ADC_Start(&hadc1);
@@ -432,20 +440,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		// Espera a conversão estar pronta (timeout opcional)
 		if(HAL_ADC_PollForConversion(&hadc1, 0) == HAL_OK)
 		{
-			transductor_input[curr_idx] = HAL_ADC_GetValue(&hadc1) * ADC_SCALE_FACTOR / TRANSDUCTOR_GAIN;
+			adc_val = HAL_ADC_GetValue(&hadc1);
+			transductor_input[curr_idx] = adc_val * ADC_SCALE_FACTOR / TRANSDUCTOR_GAIN;
 			prev_cI_output = cI[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
 			prev_error = error[(curr_idx - 1 + ARRAY_MAX_SIZE) % ARRAY_MAX_SIZE];
 
 			cP = Kp * error[curr_idx];
 			cI[curr_idx] = prev_cI_output + Ki * error[curr_idx];
-
-			if(cI[curr_idx] < -E){
-				cI[curr_idx] = -E;
-			}
-			else if(cI[curr_idx] > E){
-				cI[curr_idx] = E;
-			}
-
 			cD = Kd * (error[curr_idx] - prev_error);
 			pid_output = cP + cI[curr_idx] + cD;
 
@@ -460,6 +461,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty_cycle); // mudar o duty_cycle
 
 			curr_idx = (curr_idx + 1) % ARRAY_MAX_SIZE;
+			ref_idx = (ref_idx + 1) % WAVE_TABLE_SIZE;
 		}
 		HAL_ADC_Stop(&hadc1);
 	}
