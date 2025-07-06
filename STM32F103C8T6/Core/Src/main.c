@@ -13,10 +13,8 @@
 
 // transdutor
 #define ADC_SCALE_FACTOR (3.3f / 4096.0f)  //  3.3V em um ADC de 12bits
-// #define TRANSDUCTOR_GAIN 0.125 // (1.0 / (24.0/3.0) ) pelo divisor de tensão
-// #define TRANSDUCTOR_GAIN 0.125 // (1.0 / (24.0/3.13) )
-// #define TRANSDUCTOR_GAIN 0.045454545 //(1.0 / 22.0)
-#define TRANSDUCTOR_GAIN 0.085227273 //((0.125−0.045454545)÷2)+0.045454545
+// #define TRANSDUCTOR_GAIN 0.1
+#define TRANSDUCTOR_GAIN 0.085227273
 
 // ref
 #define PI 		3.14159265359f
@@ -47,7 +45,8 @@
 #define Kd 0.05f
 
 // alimentação
-#define E 24.0f
+// #define E 24.0f
+#define E 30.0f
 
 // duty_cycle
 // 16MHz/5kHz = 3200
